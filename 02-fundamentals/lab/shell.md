@@ -1,104 +1,512 @@
-# Shell expansion
+shell
 
-This exercise is about studying shell expansion. You should run it on your Debian VM in Vagrant.
+## **分析并总结错误要点**
 
-Create a C program `arguments.c` with the following contents. You can use `nano arguments.c` for this, for example.
+### **1. 空格的使用**
 
-```C
-#include <stdio.h>
+#### **错误示例**
 
-int main(int argc, char** argv) {
-  for(int i=0; i < argc; i++) {
-    printf("Argument #%i: [%s]\n", i, argv[i]);
-  }
-  return 0;
-}
+```sh
+if [$# -lt 2]then
 ```
 
-Compile this with `gcc -Wall arguments.c -o arguments`. 
+- **问题**：缺少空格。在 `[` 和条件之间、条件与 `]` 之间，以及 `]` 和 `then` 之间都需要空格。
 
-## Whitespace
+#### **正确用法**
 
-The program prints all its arguments, one per line. The program gets its arguments from the program that started it - in this case the shell.
-Try running the program with the following commands:
-
-    ./arguments
-    ./arguments hello
-    ./arguments one two three
-
-Now that you are familiar with what the program does, try the following:
-
-    ./arguments one       two
-    ./arguments "one two"
-    ./arguments "one      two"
-
-How, based on these examples, does the shell handle whitespace in the line you type?
-
-## Pattern matching
-
-Try the following:
-
-  * `./arguments *` in the folder that contains the arguments program, and its source code arguments.c.
-  * Make an empty subfolder with `mkdir empty`, switch to it with `cd empty` and then run `../arguments *`. Since you are now in the subfolder, we need two dots at the start to say "run the program arguments from the folder _above_". What happens?
-  * Go back to the folder with the program by running `cd ..` and then do `ls` to check you're back in the right folder. In this folder, find three different ways to get the program to produce the following output:
-
-```
-Argument #0: [./arguments]
-Argument #1: [*] 
+```sh
+if [ $# -lt 2 ]; then
 ```
 
-## Files with spaces in their names
+- **要点**：
 
-The command `touch FILENAME` creates a file. Create a file with a space in its name by typing `touch "silly named file"`. What would happen if you left the quotes off (you can try it, then do `ls`)?
+  - 在 `[` 和条件之间需要空格。
+  - 条件的各个部分之间需要空格。
+  - 条件与 `]` 之间需要空格。
+  - 在 `]` 和 `then` 之间需要空格或分号。
 
-Start typing `ls sill` and then press TAB to autocomplete. Assuming you have no other files whose name starts with _sill_, what happens? Use this method to get the arguments program to print the following:
+---
 
+### **2. 条件语句的正确用法**
+
+#### **错误示例**
+
+```sh
+if [$1 !="compile||run||build"]
 ```
-Argument #0: [./arguments]
-Argument #1: [Hello world!] 
+
+- **问题**：
+
+  - 不能直接用 `!=` 比较多个值。
+  - 缺少空格。
+
+#### **正确用法**
+
+```sh
+if [ "$1" != "compile" ] && [ "$1" != "run" ] && [ "$1" != "build" ]; then
 ```
 
-The command `rm` (remove) deletes files again. Use it to remove your file with spaces in its name, using one of several methods to get the shell to pass the spaces through to `rm`.
+**或者使用 `case` 语句：**
 
-## Shell variables
+```sh
+case "$1" in
+  "compile" | "run" | "build")
+    # 有效命令
+    ;;
+  *)
+    echo "Invalid command"
+    exit 1
+    ;;
+esac
+```
 
-In the shell, `VARIABLE=VALUE` sets a variable to a value and `$VARIABLE` retrieves its value. For example, to save typing a filename twice:
+- **要点**：
 
-    p=arguments
-    gcc -Wall $p.c -o $p
+  - 使用 `[ ]` 进行条件判断时，条件左右需要空格。
+  - 比较字符串时，变量和字符串都应该用双引号括起来，以防止空值或包含空格的值导致错误。
+  - 对于多个值的比较，使用逻辑运算符 `&&`（AND）或 `||`（OR），或者使用 `case` 语句。
 
-which expands to `gcc -Wall arguments.c -o arguments`. If you want to use a variable inside a word, you can use curly braces: `${a}b` means the value of the variable `a` followed by the letter b, whereas `$ab` would mean the value of the variable `ab`.
+---
 
-It is good practice to double-quote variables used like this, because if you tried for example to compile a program called `silly name.c` with a space in its name, then
+### **3. 变量赋值**
 
-    program="silly name"
-    gcc -Wall $program.c -o $program
+#### **错误示例**
 
-would expand to
+```sh
+command = $1
+sourcename = $2
+```
 
-    gcc -Wall silly name.c -o silly name
+- **问题**：变量赋值时，`=` 两侧不应有空格。
 
-and this would confuse your compiler because you are telling it to compile three source files called `silly`, `name.c` and `name` to a program called `silly`. Correct would be:
+#### **正确用法**
 
-    program="silly name"
-    gcc -Wall "$program.c" -o "$program"
+```sh
+command=$1
+sourcename=$2
+```
 
-which expands to
+- **要点**：
 
-    gcc -Wall "silly name.c" -o "silly name"
+  - 在变量赋值时，等号 `=` 两侧不能有空格。
+  - 变量名和等号紧挨，等号和值紧挨。
 
-which does what you want - if you indeed want a program with a space in its name!
+---
 
-There is no harm in double-quoting a shell variable every time you want to use it, and this is good practice as it still works if the variable is set to a value that contains spaces.
+### **4. 变量的引用和参数扩展**
 
-Note that we also had to quote setting the variable name in the first place, because
+#### **错误示例**
 
-    program=silly name
+```sh
+withoutc = "{$sourcename}%.c"
+```
 
-would translate as: set the variable `program` to the value `silly`, then execute the program `name`. Variable assignments only apply to the first argument following them, although you can assign more than one variable.
+- **问题**：
 
-Note that this does not work as expected either:
+  - 变量引用和参数扩展的语法错误。
+  - 不需要大括号 `{}`，而是需要 `${}`。
+  - `%.c` 应该在大括号内，不需要引号。
 
-    file=arguments gcc -Wall "$file.c" -o "$file"
+#### **正确用法**
 
-The problem here is that the shell first reads the line and substitutes in the value of `$file` (unset variables expand to the empty string by default) before starting to execute the command, so you are reading the variable's value before writing it. Leaving off the quotes doesn't help: you need to set the variable on a separate line.
+```sh
+withoutc=${sourcename%.c}
+```
+
+- **要点**：
+
+  - 使用 `${变量名}` 来引用变量的值，尤其是在需要进行参数扩展时。
+  - 参数扩展的语法为 `${变量名%匹配模式}`，用于删除变量值中匹配模式的最短部分（从右边开始）。
+  - 不需要额外的引号或大括号。
+
+---
+
+### **5. 字符串比较和模式匹配**
+
+#### **错误示例**
+
+```sh
+if [$2 != *.c]then
+```
+
+- **问题**：
+
+  - 在 `[ ]` 中不能使用通配符 `*` 进行模式匹配。
+  - 缺少空格。
+
+#### **正确用法**
+
+```sh
+if [[ "$sourcename" != *.c ]]; then
+```
+
+- **要点**：
+
+  - 使用双中括号 `[[ ]]` 进行模式匹配，支持通配符 `*`。
+  - 在使用 `[[ ]]` 时，条件两侧的空格仍然需要。
+  - 变量要用双引号括起来，以防止空值或包含空格的值导致错误。
+
+---
+
+### **6. 字符串拼接**
+
+#### **错误示例**
+
+```sh
+".c">>$sourcename
+```
+
+- **问题**：
+
+  - `>>` 是用于文件重定向的，不是用于字符串拼接。
+  - 这条命令会尝试将字符串 `".c"` 追加到名为 `$sourcename` 的文件中。
+
+#### **正确用法**
+
+```sh
+sourcename="${sourcename}.c"
+```
+
+- **要点**：
+
+  - 直接在变量赋值中拼接字符串。
+  - 使用双引号将整个字符串括起来，以防止空格导致的问题。
+
+---
+
+### **7. `case` 语句的正确用法**
+
+#### **错误示例**
+
+```sh
+case$1
+in "compile"
+```
+
+- **问题**：
+
+  - `case` 和变量名之间缺少空格。
+  - `in` 应该与变量名在同一行，且与模式之间要有空格。
+
+#### **正确用法**
+
+```sh
+case $1 in
+  "compile")
+    # 执行的命令
+    ;;
+esac
+```
+
+- **要点**：
+
+  - `case` 关键字和变量名之间需要空格。
+  - `in` 放在变量名后，同一行，且与模式之间有空格。
+  - 模式后使用右括号 `)`。
+  - 每个匹配块以双分号 `;;` 结束。
+
+---
+
+### **8. 命令中变量的正确使用**
+
+#### **错误示例**
+
+```sh
+gcc -std=c99 {$sourcename} -o {$withoutc}
+```
+
+- **问题**：
+
+  - `{}` 在这里不用于变量引用，Shell 会将 `{}` 当作字面字符。
+  - 变量应该直接用 `$变量名` 或 `"${变量名}"`。
+
+#### **正确用法**
+
+```sh
+gcc -std=c99 "$sourcename" -o "$withoutc"
+```
+
+- **要点**：
+
+  - 在命令中使用变量时，直接用 `$变量名`。
+  - 如果变量可能包含空格或特殊字符，使用双引号括起来。
+  - `{}` 在 Shell 中用于参数扩展，不用于普通的变量引用。
+
+---
+
+### **9. `return` 和 `exit` 的区别**
+
+#### **错误示例**
+
+```sh
+return 1;;
+```
+
+- **问题**：
+
+  - `return` 用于函数内部，不能在脚本的主执行体中使用。
+  - 脚本中应该使用 `exit`。
+
+#### **正确用法**
+
+```sh
+exit 1
+```
+
+- **要点**：
+
+  - `exit` 用于退出脚本，并返回指定的退出状态码。
+  - `return` 用于函数内部，返回函数的退出状态码。
+
+---
+
+### **10. 条件语句中测试操作符的使用**
+
+#### **错误示例**
+
+```sh
+if [test $2 -f =0] then
+```
+
+- **问题**：
+
+  - `test` 应该是 `[ ]` 的别名，不需要在 `[ ]` 中再次使用 `test`。
+  - 条件语法错误。
+
+#### **正确用法**
+
+```sh
+if [ ! -f "$2" ]; then
+```
+
+- **要点**：
+
+  - 使用 `-f` 检查文件是否存在且为普通文件。
+  - 使用 `!` 表示条件的否定。
+  - `[ ]` 内的语法为 `[ 条件 ]`。
+
+---
+
+### **11. 变量和特殊符号的区别**
+
+#### **错误示例**
+
+```sh
+if [{$#} = 2] then
+```
+
+- **问题**：
+
+  - `{$#}` 会被当作字面字符串 `{2}`，而不是变量的值。
+  - `#` 前面的 `$` 已经表示变量的值。
+
+#### **正确用法**
+
+```sh
+if [ $# -eq 2 ]; then
+```
+
+- **要点**：
+
+  - 直接使用 `$#` 获取参数个数。
+  - 不需要将 `$#` 包裹在 `{}` 中，除非需要明确界定变量名。
+  - 使用 `-eq` 比较整数是否相等。
+
+---
+
+### **12. 注释的使用**
+
+#### **错误示例**
+
+```sh
+#how to use return values to directly repeat steps?
+```
+
+- **问题**：
+
+  - 注释没有问题，但要确保注释不会影响代码的可读性。
+
+- **要点**：
+
+  - 使用 `#` 进行注释时，注释内容与 `#` 之间加一个空格，提高可读性。
+  - 将注释放在相关代码的上方或旁边，避免影响代码结构。
+
+---
+
+## **总结要点**
+
+1. **空格的使用**：
+
+   - 条件判断 `[ ]` 内部和外部的空格非常重要。
+     - `[ 条件 ]`：`[` 和条件之间、条件各部分之间、条件与 `]` 之间都需要空格。
+   - `if`、`then`、`fi` 等关键字之间需要正确的空格或换行。
+     - `if [ 条件 ]; then` 或者
+       ```sh
+       if [ 条件 ]
+       then
+       ```
+   - 变量赋值时，`=` 两侧不能有空格。
+     - `变量名=值`
+
+2. **变量的赋值和引用**：
+
+   - 赋值时，不要在 `=` 两侧添加空格。
+     - `variable=value`
+   - 引用变量时，使用 `$变量名`。
+   - 当变量可能为空或包含空格、特殊字符时，用双引号括起来。
+     - `"$变量名"`
+
+3. **条件判断和逻辑运算**：
+
+   - 使用 `[ ]` 进行基本的条件判断，使用 `[[ ]]` 进行模式匹配。
+   - 比较字符串时，使用 `=` 或 `!=`，并将变量和字符串用双引号括起来。
+     - `[ "$a" = "$b" ]`
+   - 比较整数时，使用 `-eq`、`-ne`、`-lt`、`-le`、`-gt`、`-ge`。
+     - `[ "$num1" -lt "$num2" ]`
+   - 逻辑运算符：
+     - `&&`：逻辑与（AND）
+     - `||`：逻辑或（OR）
+     - 在 `[ ]` 中不能直接使用 `&&` 和 `||`，需要在条件之间使用。
+     - 例如：
+       ```sh
+       if [ "$a" = "1" ] && [ "$b" = "2" ]; then
+       ```
+
+4. **字符串操作和参数扩展**：
+
+   - 使用 `${变量名%匹配模式}` 删除变量值中匹配模式的最短部分（从右边开始）。
+     - `filename=${sourcename%.c}`
+   - 字符串拼接直接使用 `变量名="前缀${变量名}后缀"`。
+
+5. **`case` 语句的使用**：
+
+   - 语法结构：
+     ```sh
+     case "$变量" in
+       模式1)
+         # 命令
+         ;;
+       模式2)
+         # 命令
+         ;;
+       *)
+         # 默认情况
+         ;;
+     esac
+     ```
+   - `case` 和变量名之间需要空格。
+   - `in` 需要与变量名在同一行，模式与 `)` 之间不需要空格。
+   - 每个匹配块以双分号 `;;` 结束。
+
+6. **文件测试操作符**：
+
+   - `-f`：检查文件是否存在且为普通文件。
+     - `[ -f "$filename" ]`
+   - `-x`：检查文件是否存在且可执行。
+     - `[ -x "$filename" ]`
+   - `!`：取反，表示条件的否定。
+     - `[ ! -f "$filename" ]`
+
+7. **`exit` 和 `return` 的区别**：
+
+   - `exit`：退出脚本或 shell，会结束当前脚本的执行。
+     - `exit 0`：成功退出。
+     - `exit 1`：表示发生错误，退出状态码为非零。
+   - `return`：用于函数内部，返回函数的退出状态码。
+     - 在脚本的主执行体中不应使用 `return`。
+
+8. **正确的注释使用**：
+
+   - 使用 `#` 进行注释，注释内容与 `#` 之间加一个空格。
+   - 注释应清晰明了，放在相关代码的上方或旁边。
+
+---
+
+## **示例：修正后的脚本**
+
+```sh
+#!/bin/bash
+
+# 检查是否提供了足够的参数
+if [ $# -lt 2 ]; then
+    echo "Error: Not enough arguments."
+    echo "Usage: ./b {compile|run|build} filename"
+    exit 1
+fi
+
+command=$1
+sourcename=$2
+
+# 移除 .c 后缀（如果有）
+withoutc=${sourcename%.c}
+
+# 如果文件名不以 .c 结尾，添加 .c 后缀
+if [[ "$sourcename" != *.c ]]; then
+    sourcename="${sourcename}.c"
+fi
+
+# 验证命令是否有效
+if [ "$command" != "compile" ] && [ "$command" != "run" ] && [ "$command" != "build" ]; then
+    echo "Invalid command. Use 'compile', 'run', or 'build'."
+    exit 1
+fi
+
+case $command in
+    "compile")
+        # 检查源文件是否存在
+        if [ ! -f "$sourcename" ]; then
+            echo "Error: Source file '$sourcename' not found."
+            exit 1
+        fi
+        # 编译源文件
+        gcc -Wall -std=c11 -g "$sourcename" -o "$withoutc"
+        if [ $? -ne 0 ]; then
+            echo "Compilation failed."
+            exit 1
+        fi
+        ;;
+    "run")
+        # 检查可执行文件是否存在且可执行
+        if [ ! -x "$withoutc" ]; then
+            echo "Error: Executable '$withoutc' not found or not executable."
+            exit 1
+        fi
+        # 运行可执行文件
+        ./"$withoutc"
+        ;;
+    "build")
+        # 检查源文件是否存在
+        if [ ! -f "$sourcename" ]; then
+            echo "Error: Source file '$sourcename' not found."
+            exit 1
+        fi
+        # 编译源文件
+        gcc -Wall -std=c11 -g "$sourcename" -o "$withoutc"
+        if [ $? -eq 0 ]; then
+            # 如果编译成功，运行可执行文件
+            ./"$withoutc"
+        else
+            echo "Compilation failed."
+            exit 1
+        fi
+        ;;
+esac
+```
+
+---
+
+## **结论**
+
+通过总结您的错误并归纳出以上要点，您现在可以更好地理解 Shell 脚本编写中的常见问题和正确用法。记住以下几点将有助于您避免类似的错误：
+
+- **注意空格和符号的使用**：在条件判断、变量赋值、字符串操作等地方，正确的空格和符号使用非常重要。
+
+- **变量引用和字符串处理**：了解如何正确地引用变量和操作字符串，有助于避免语法错误和逻辑错误。
+
+- **条件语句和逻辑运算**：熟悉 `if`、`case` 等条件语句的正确语法，以及如何使用逻辑运算符。
+
+- **文件操作符的使用**：掌握文件测试操作符，如 `-f`、`-x`，可以帮助您正确地检查文件状态。
+
+- **注释和代码格式**：良好的注释和代码格式可以提高代码的可读性和可维护性。
+
+希望这些总结对您有所帮助，祝您在学习 Shell 脚本的过程中取得进步！
